@@ -15,6 +15,7 @@ public sealed record DocumentResponse(
     string FileName,
     string Status,
     long? ContentSizeBytes,
+    long? PreviewSizeBytes,
     IReadOnlyList<AuditEntryResponse> AuditTrail)
 {
     public static DocumentResponse FromDomain(Document d) => new(
@@ -29,6 +30,7 @@ public sealed record DocumentResponse(
         d.Metadata.FileName,
         d.Status.ToString(),
         d.ContentSizeBytes,
+        d.PreviewSizeBytes,
         d.AuditTrail.Select(a => new AuditEntryResponse(a.Status.ToString(), a.Timestamp, a.Detail)).ToList());
 }
 

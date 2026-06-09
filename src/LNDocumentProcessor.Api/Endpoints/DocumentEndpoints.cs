@@ -37,6 +37,18 @@ public static class DocumentEndpoints
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapGet("/{id:guid}/status", GetStatusAsync)
+            .WithName("GetDocumentStatus")
+            .WithSummary("Check processing status for a document.")
+            .Produces<DocumentStatusResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        group.MapGet("/{id:guid}/preview", GetPreviewAsync)
+            .WithName("GetDocumentPreview")
+            .WithSummary("Retrieve the generated preview/summary (available once processed).")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
         return app;
     }
 
@@ -135,6 +147,41 @@ public static class DocumentEndpoints
         return stream is null
             ? Results.NotFound()
             : Results.File(stream, document.Metadata.ContentType, document.Metadata.FileName);
+    }
+
+    private static async Task<IResult> GetStatusAsync(
+        Guid id, IDocumentRepository repository, CancellationToken cancellationToken)
+    {
+        var document = await repository.GetByIdAsync(id, cancellationToken);
+        return document is null
+            ? Results.NotFound()
+            : Results.Ok(DocumentStatusResponse.FromDomain(document));
+    }
+
+    private static async Task<IResult> GetPreviewAsync(
+        Guid id,
+        IDocumentRepository repository,
+        IStorageService storage,
+        CancellationToken cancellationToken)
+    {
+        var document = await repository.GetByIdAsync(id, cancellationToken);
+        if (document is null)
+        {
+            return Results.NotFound();
+        }
+
+        // Preview only exists once processing has completed.
+        if (document.PreviewReference is null)
+        {
+            return Results.Problem(
+                $"Preview not available; document status is '{document.Status}'.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var stream = await storage.OpenReadAsync(document.PreviewReference, cancellationToken);
+        return stream is null
+            ? Results.NotFound()
+            : Results.File(stream, "text/plain; charset=utf-8", $"{document.Id}-preview.txt");
     }
 
     private static string? NullIfEmpty(string value)

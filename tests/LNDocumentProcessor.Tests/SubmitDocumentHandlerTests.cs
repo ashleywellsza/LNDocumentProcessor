@@ -1,6 +1,7 @@
 using System.Text;
 using LNDocumentProcessor.Api.Application.Abstractions;
 using LNDocumentProcessor.Api.Application.Documents;
+using LNDocumentProcessor.Api.Application.Processing;
 using LNDocumentProcessor.Api.Domain;
 using LNDocumentProcessor.Api.Infrastructure.Persistence;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,7 +16,7 @@ public sealed class SubmitDocumentHandlerTests
         var storage = new CountingStorageService();
         var repository = new InMemoryDocumentRepository();
         var handler = new SubmitDocumentHandler(
-            repository, storage, TimeProvider.System, NullLogger<SubmitDocumentHandler>.Instance);
+            repository, storage, new CollectingQueue(), TimeProvider.System, NullLogger<SubmitDocumentHandler>.Instance);
 
         var first = await handler.HandleAsync(NewCommand());
         var second = await handler.HandleAsync(NewCommand());
@@ -32,21 +33,26 @@ public sealed class SubmitDocumentHandlerTests
     }
 
     [Fact]
-    public async Task Fresh_submission_stores_content_and_records_received_then_stored()
+    public async Task Fresh_submission_stores_content_queues_work_and_records_received_stored_queued()
     {
         var storage = new CountingStorageService();
         var repository = new InMemoryDocumentRepository();
+        var queue = new CollectingQueue();
         var handler = new SubmitDocumentHandler(
-            repository, storage, TimeProvider.System, NullLogger<SubmitDocumentHandler>.Instance);
+            repository, storage, queue, TimeProvider.System, NullLogger<SubmitDocumentHandler>.Instance);
 
         var result = await handler.HandleAsync(NewCommand());
 
-        Assert.Equal(DocumentStatus.Stored, result.Document.Status);
+        Assert.Equal(DocumentStatus.Queued, result.Document.Status);
         Assert.Equal(
-            new[] { DocumentStatus.Received, DocumentStatus.Stored },
+            new[] { DocumentStatus.Received, DocumentStatus.Stored, DocumentStatus.Queued },
             result.Document.AuditTrail.Select(a => a.Status));
         Assert.NotNull(result.Document.BlobReference);
         Assert.True(result.Document.ContentSizeBytes > 0);
+
+        // Exactly one processing message was enqueued, targeting this document.
+        var message = Assert.Single(queue.Messages);
+        Assert.Equal(result.Document.Id, message.DocumentId);
     }
 
     private static SubmitDocumentCommand NewCommand() => new(
@@ -80,5 +86,27 @@ public sealed class SubmitDocumentHandlerTests
 
         public Task<Stream?> OpenReadAsync(string reference, CancellationToken cancellationToken = default)
             => Task.FromResult<Stream?>(_objects.TryGetValue(reference, out var bytes) ? new MemoryStream(bytes) : null);
+    }
+
+    /// <summary>Fake queue that records enqueued messages instead of dispatching them.</summary>
+    private sealed class CollectingQueue : IDocumentProcessingQueue
+    {
+        public List<DocumentProcessingMessage> Messages { get; } = new();
+
+        public ValueTask EnqueueAsync(DocumentProcessingMessage message, CancellationToken cancellationToken = default)
+        {
+            Messages.Add(message);
+            return ValueTask.CompletedTask;
+        }
+
+        public async IAsyncEnumerable<DocumentProcessingMessage> DequeueAllAsync(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            foreach (var message in Messages)
+            {
+                yield return message;
+            }
+            await Task.CompletedTask;
+        }
     }
 }

@@ -1,4 +1,5 @@
 using LNDocumentProcessor.Api.Application.Abstractions;
+using LNDocumentProcessor.Api.Application.Processing;
 using LNDocumentProcessor.Api.Domain;
 
 namespace LNDocumentProcessor.Api.Application.Documents;
@@ -15,17 +16,20 @@ public sealed class SubmitDocumentHandler
 {
     private readonly IDocumentRepository _repository;
     private readonly IStorageService _storage;
+    private readonly IDocumentProcessingQueue _queue;
     private readonly TimeProvider _clock;
     private readonly ILogger<SubmitDocumentHandler> _logger;
 
     public SubmitDocumentHandler(
         IDocumentRepository repository,
         IStorageService storage,
+        IDocumentProcessingQueue queue,
         TimeProvider clock,
         ILogger<SubmitDocumentHandler> logger)
     {
         _repository = repository;
         _storage = storage;
+        _queue = queue;
         _clock = clock;
         _logger = logger;
     }
@@ -70,8 +74,20 @@ public sealed class SubmitDocumentHandler
         // 4. Persist metadata + audit trail.
         await _repository.AddAsync(document, cancellationToken);
 
+        // 5. Mark Queued BEFORE enqueuing so the worker never observes a
+        //    document still mid-intake (the in-memory repo shares the instance).
+        document.MarkQueued(_clock.GetUtcNow());
+        await _repository.UpdateAsync(document, cancellationToken);
+
+        var message = new DocumentProcessingMessage(
+            document.Id,
+            document.SourceDocumentId,
+            DocumentProcessingMessage.GeneratePreviewAction,
+            _clock.GetUtcNow());
+        await _queue.EnqueueAsync(message, cancellationToken);
+
         _logger.LogInformation(
-            "Stored document {DocumentId} ({SizeBytes} bytes) for {DedupKey}.",
+            "Stored and queued document {DocumentId} ({SizeBytes} bytes) for {DedupKey}.",
             document.Id, stored.SizeBytes, document.DedupKeyValue);
 
         return new SubmitDocumentResult(document, IsDuplicate: false);
