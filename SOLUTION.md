@@ -97,7 +97,17 @@ Each document carries a list of `AuditEntry` records (status + timestamp). Statu
 
 ### 7. Containerization vs Run Script
 
-_To be decided_: The assignment requires one of the two. The current choice is a **Dockerfile** because it produces a fully self-contained artifact and is the more production-representative option.
+Chose a **Dockerfile** (multi-stage: .NET 8 SDK build → ASP.NET 8 runtime). It produces a fully self-contained artifact a reviewer can run with two commands and no local .NET SDK, and is the more production-representative option. A run script was the alternative, but since all dependencies (worker, queue, storage) run in-process there is nothing extra to orchestrate, so a container is both sufficient and cleaner.
+
+**Trade-off**: Slightly slower first run (image build) than `dotnet run`, and Swagger is gated to the Development environment so it is off by default in the container (documented env flag enables it).
+
+### 8. SDK Pinning for Portability
+
+`global.json` pins a floor of `8.0.100` with `rollForward: latestMajor`. This documents the .NET 8 target while still building on a machine that only has the .NET 9 SDK installed (as the development environment did), so neither an 8-only nor a 9-only reviewer is blocked.
+
+### 9. CI
+
+A single GitHub Actions workflow restores, builds in Release, and runs the tests on every push and on PRs to `main`. It installs the .NET 8 SDK only — `global.json` resolves to it, and the tests target `net8.0`.
 
 ---
 
