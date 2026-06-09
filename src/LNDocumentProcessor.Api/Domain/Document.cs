@@ -42,6 +42,12 @@ public sealed class Document
     /// <summary>Size in bytes of the stored raw content; null until stored.</summary>
     public long? ContentSizeBytes { get; private set; }
 
+    /// <summary>Reference to the generated preview in storage; null until processed.</summary>
+    public string? PreviewReference { get; private set; }
+
+    /// <summary>Size in bytes of the generated preview; null until processed.</summary>
+    public long? PreviewSizeBytes { get; private set; }
+
     public DocumentStatus Status { get; private set; }
 
     public IReadOnlyList<AuditEntry> AuditTrail => _auditTrail;
@@ -76,6 +82,27 @@ public sealed class Document
         ContentSizeBytes = contentSizeBytes;
         Transition(DocumentStatus.Stored, timestamp);
     }
+
+    /// <summary>Records that the document has been queued for background processing.</summary>
+    public void MarkQueued(DateTimeOffset timestamp) => Transition(DocumentStatus.Queued, timestamp);
+
+    /// <summary>Records that the worker has begun processing the document.</summary>
+    public void MarkProcessing(DateTimeOffset timestamp) => Transition(DocumentStatus.Processing, timestamp);
+
+    /// <summary>
+    /// Records that a preview has been generated and stored, advancing status
+    /// to Processed.
+    /// </summary>
+    public void MarkProcessed(string previewReference, long previewSizeBytes, DateTimeOffset timestamp)
+    {
+        PreviewReference = previewReference;
+        PreviewSizeBytes = previewSizeBytes;
+        Transition(DocumentStatus.Processed, timestamp);
+    }
+
+    /// <summary>Records a processing failure with a human-readable reason for visibility.</summary>
+    public void MarkFailed(string reason, DateTimeOffset timestamp)
+        => Transition(DocumentStatus.Failed, timestamp, reason);
 
     /// <summary>Records a status transition and appends it to the audit trail.</summary>
     public void Transition(DocumentStatus status, DateTimeOffset timestamp, string? detail = null)
