@@ -30,38 +30,23 @@ dotnet build
 dotnet run --project src/LNDocumentProcessor.Api
 ```
 
-The API will be available at `http://localhost:5000` (or as configured in `appsettings.Development.json`).
-
-### Option 2 — Run Script
-
-```powershell
-# Windows
-./run.ps1
-```
+The API and its Swagger UI will be available at the URL printed on startup (e.g. `http://localhost:5080/swagger`). Override the port with `--urls`:
 
 ```bash
-# Linux / macOS
-./run.sh
+dotnet run --project src/LNDocumentProcessor.Api --urls http://localhost:5080
 ```
 
-### Option 3 — Docker
-
-```bash
-docker build -t ln-document-processor .
-docker run -p 5000:8080 ln-document-processor
-```
+> A containerized run path (Dockerfile) or a run script will be added as a later deliverable; for now use the .NET CLI above.
 
 ---
 
 ## Configuration
 
-All runtime configuration lives in `src/LNDocumentProcessor.Api/appsettings.Development.json`.
+All runtime configuration lives in `src/LNDocumentProcessor.Api/appsettings.json`.
 
 | Key | Default | Description |
 |---|---|---|
-| `Storage:Provider` | `FileSystem` | `FileSystem` for local runs; `AzureBlob` or `S3` for cloud |
-| `Storage:BasePath` | `./local-storage` | Root path for file-system storage (local only) |
-| `Queue:Provider` | `InMemory` | `InMemory` for local runs; `ServiceBus` or `SQS` for cloud |
+| `Storage:FileSystem:BasePath` | `./local-storage` | Root path for the local file-system storage substitute |
 
 ---
 
@@ -69,12 +54,22 @@ All runtime configuration lives in `src/LNDocumentProcessor.Api/appsettings.Deve
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/documents` | Submit a new document |
-| `GET` | `/documents/{documentId}` | Retrieve document metadata and status |
-| `GET` | `/documents/{documentId}/content` | Download raw document content |
-| `GET` | `/documents/{documentId}/preview` | Retrieve the generated preview |
+| `POST` | `/documents` | Submit a document (`multipart/form-data`: metadata fields + `file`). Returns **201** for a new document, or **200** if the same `provider + sourceDocumentId` was already submitted (idempotent). |
+| `GET` | `/documents/{id}` | Retrieve document metadata, status, and audit trail |
+| `GET` | `/documents/{id}/content` | Download the raw stored content |
 
-Full request/response schemas are documented in the Swagger UI available at `http://localhost:5000/swagger` when running in Development mode.
+The `POST /documents` form accepts: `sourceDocumentId` (required), `provider` (required), `title` (required), `jurisdiction`, `categories` (comma-separated), `tags` (comma-separated), `contentType`, `fileName`, and `file` (the document, ≤ 5 MB).
+
+Full request/response schemas are documented in the Swagger UI (see the startup URL) when running in Development mode.
+
+### Example
+
+```bash
+curl -X POST http://localhost:5080/documents \
+  -F "sourceDocumentId=SRC-1001" -F "provider=acme-legal" -F "title=Sample Brief" \
+  -F "jurisdiction=ZA" -F "categories=filing,brief" -F "tags=urgent,q2" \
+  -F "file=@sample.txt;type=text/plain"
+```
 
 ---
 

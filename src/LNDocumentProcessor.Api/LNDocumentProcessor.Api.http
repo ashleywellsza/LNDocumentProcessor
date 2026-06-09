@@ -1,0 +1,6 @@
+@LNDocumentProcessor.Api_HostAddress = http://localhost:5147
+
+GET {{LNDocumentProcessor.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
