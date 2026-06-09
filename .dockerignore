@@ -1,0 +1,18 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# Local runtime artifacts
+**/local-storage/
+
+# VCS and tooling
+.git/
+.github/
+.vs/
+.vscode/
+
+# Tests are not needed in the runtime image
+tests/
+
+# Docs
+*.md
