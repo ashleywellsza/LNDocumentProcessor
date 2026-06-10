@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LexisNexis · Document Intake & Processing</title>
+
+  <!-- Tailwind (CDN build — fine for this test/demo harness; not a production asset pipeline) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            lexis: { DEFAULT: '#C8102E', dark: '#9E0C24', darker: '#7A0A1C', light: '#E63A4F', tint: '#FCE9EC' },
+            ink: '#16181D',
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'] },
+          boxShadow: { card: '0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.06)', lift: '0 10px 30px -12px rgba(16,24,40,.25)' },
+        }
+      }
+    }
+  </script>
+
+  <!-- Inter font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Alpine.js for reactivity -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .spin { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pulse-dot { animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    .fade-in { animation: fade .35s ease both; }
+    @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .timeline::before { content:''; position:absolute; left:11px; top:6px; bottom:6px; width:2px; background:#E5E7EB; }
+  </style>
+</head>
+
+<body class="h-full bg-gray-50 text-ink antialiased">
+  <div x-data="app()" x-init="init()" class="min-h-full flex flex-col">
+
+    <!-- Top accent bar -->
+    <div class="h-1.5 bg-lexis"></div>
+
+    <!-- Header -->
+    <header class="bg-ink text-white">
+      <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-lexis grid place-items-center font-extrabold text-lg shadow-lift">LN</div>
+          <div>
+            <div class="font-extrabold tracking-tight leading-none text-lg">LexisNexis</div>
+            <div class="text-xs text-gray-300 leading-none mt-1">Document Intake &amp; Processing</div>
+          </div>
+        </div>
+        <nav class="flex items-center gap-5 text-sm">
+          <a href="/swagger" target="_blank" class="text-gray-300 hover:text-white transition">API docs</a>
+          <span class="hidden sm:flex items-center gap-2 text-gray-300">
+            <span class="w-2 h-2 rounded-full" :class="apiOnline ? 'bg-emerald-400' : 'bg-gray-500'"></span>
+            <span x-text="apiOnline ? 'Service online' : 'Checking…'"></span>
+          </span>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-1 max-w-6xl w-full mx-auto px-6 py-8">
+      <div class="mb-7">
+        <h1 class="text-2xl font-bold tracking-tight">Submit a document</h1>
+        <p class="text-gray-500 mt-1">Upload a document on behalf of an upstream provider. It is stored, queued, and processed into a short preview in the background.</p>
+      </div>
+
+      <div class="grid lg:grid-cols-5 gap-6">
+
+        <!-- ===== Submission form ===== -->
+        <section class="lg:col-span-2">
+          <form @submit.prevent="submit()" class="bg-white rounded-2xl shadow-card border border-gray-100 p-6 space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div class="col-span-1">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Provider <span class="text-lexis">*</span></label>
+                <select x-model="form.provider"
+                        class="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 my-1 bg-white focus:border-lexis focus:ring-lexis text-sm">
+                  <option value="" disabled>Select a provider…</option>
+                  <template x-for="p in providers" :key="p">
+                    <option :value="p" x-text="p"></option>
+                  </template>
+                </select>
+                <p x-show="errors.provider" x-text="errors.provider" class="text-xs text-lexis mt-1"></p>
+              </div>
+              <div class="col-span-1">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Source document ID <span class="text-lexis">*</span></label>
+                <input x-model="form.sourceDocumentId" type="text" placeholder="SRC-1001"
+                       class="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 my-1 focus:border-lexis focus:ring-lexis text-sm" />
+                <p x-show="errors.sourceDocumentId" x-text="errors.sourceDocumentId" class="text-xs text-lexis mt-1"></p>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Title <span class="text-lexis">*</span></label>
+              <input x-model="form.title" type="text" placeholder="Service Agreement"
+                     class="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 my-1 focus:border-lexis focus:ring-lexis text-sm" />
+              <p x-show="errors.title" x-text="errors.title" class="text-xs text-lexis mt-1"></p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Jurisdiction</label>
+                <input x-model="form.jurisdiction" type="text" placeholder="ZA"
+                       class="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 my-1 focus:border-lexis focus:ring-lexis text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Categories</label>
+                <input x-model="form.categories" type="text" placeholder="contract, filing"
+                       class="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 my-1 focus:border-lexis focus:ring-lexis text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+              <input x-model="form.tags" type="text" placeholder="urgent, q2"
+                     class="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 my-1 focus:border-lexis focus:ring-lexis text-sm" />
+              <p class="text-xs text-gray-400 mt-1">Comma-separated.</p>
+            </div>
+
+            <!-- File drop zone -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Document file <span class="text-lexis">*</span></label>
+              <div @dragover.prevent="dragging=true" @dragleave.prevent="dragging=false" @drop.prevent="onDrop($event)"
+                   @click="$refs.file.click()"
+                   class="cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition"
+                   :class="dragging ? 'border-lexis bg-lexis-tint' : (form.file ? 'border-emerald-300 bg-emerald-50' : 'border-gray-300 hover:border-lexis hover:bg-lexis-tint/40')">
+                <input type="file" x-ref="file" class="hidden" @change="onPick($event)" />
+                <template x-if="!form.file">
+                  <div class="text-gray-500">
+                    <svg class="w-8 h-8 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                    <span class="font-medium text-lexis">Click to upload</span> or drag &amp; drop
+                    <div class="text-xs text-gray-400 mt-1">Any file up to 5&nbsp;MB</div>
+                  </div>
+                </template>
+                <template x-if="form.file">
+                  <div class="text-sm">
+                    <div class="font-medium text-emerald-700" x-text="form.file.name"></div>
+                    <div class="text-xs text-gray-500 mt-0.5" x-text="prettyBytes(form.file.size) + ' · ' + (form.file.type || 'unknown type')"></div>
+                    <button type="button" @click.stop="clearFile()" class="text-xs text-lexis hover:underline mt-1">Remove</button>
+                  </div>
+                </template>
+              </div>
+              <p x-show="errors.file" x-text="errors.file" class="text-xs text-lexis mt-1"></p>
+            </div>
+
+            <div class="flex items-center gap-3 pt-1">
+              <button type="submit" :disabled="submitting"
+                      class="inline-flex items-center gap-2 bg-lexis hover:bg-lexis-dark active:bg-lexis-darker disabled:opacity-60 text-white font-semibold text-sm px-5 py-2.5 rounded-lg shadow-sm transition">
+                <svg x-show="submitting" class="w-4 h-4 spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" class="opacity-25"/><path d="M21 12a9 9 0 00-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                <span x-text="submitting ? 'Submitting…' : 'Submit document'"></span>
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <!-- ===== Result / status panel ===== -->
+        <section class="lg:col-span-3 space-y-6">
+
+          <!-- Empty state -->
+          <div x-show="!doc && !globalError" x-cloak class="bg-white rounded-2xl shadow-card border border-gray-100 p-10 text-center text-gray-400">
+            <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+            <p class="font-medium text-gray-500">No document yet</p>
+            <p class="text-sm">Submit a document and its processing status will appear here.</p>
+          </div>
+
+          <!-- Global error -->
+          <div x-show="globalError" x-cloak class="bg-lexis-tint border border-lexis/30 text-lexis-darker rounded-2xl p-4 text-sm fade-in">
+            <span class="font-semibold">Error:</span> <span x-text="globalError"></span>
+          </div>
+
+          <!-- Document card -->
+          <template x-if="doc">
+            <div class="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden fade-in">
+              <!-- duplicate banner -->
+              <div x-show="isDuplicate" class="bg-amber-50 border-b border-amber-200 text-amber-800 px-5 py-2.5 text-sm flex items-center gap-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                Duplicate detected — returned the existing record (HTTP 200). Not re-queued.
+              </div>
+
+              <div class="p-6">
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 class="text-lg font-bold leading-tight" x-text="doc.title"></h2>
+                    <p class="text-sm text-gray-500 mt-0.5">
+                      <span x-text="doc.provider"></span> · <span class="font-mono" x-text="doc.sourceDocumentId"></span>
+                    </p>
+                  </div>
+                  <span class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold" :class="badge(doc.status).cls">
+                    <span class="w-1.5 h-1.5 rounded-full" :class="[badge(doc.status).dot, (doc.status==='Processing'||doc.status==='Queued') ? 'pulse-dot' : '']"></span>
+                    <span x-text="doc.status"></span>
+                  </span>
+                </div>
+
+                <!-- meta grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 text-sm">
+                  <div>
+                    <div class="text-gray-400 text-xs uppercase tracking-wide">Document ID</div>
+                    <div class="font-mono text-xs mt-1 break-all" x-text="doc.documentId"></div>
+                  </div>
+                  <div>
+                    <div class="text-gray-400 text-xs uppercase tracking-wide">Content</div>
+                    <div class="mt-1" x-text="prettyBytes(doc.contentSizeBytes)"></div>
+                  </div>
+                  <div>
+                    <div class="text-gray-400 text-xs uppercase tracking-wide">Preview</div>
+                    <div class="mt-1" x-text="doc.previewSizeBytes != null ? prettyBytes(doc.previewSizeBytes) : '—'"></div>
+                  </div>
+                  <div>
+                    <div class="text-gray-400 text-xs uppercase tracking-wide">Type</div>
+                    <div class="mt-1 truncate" x-text="doc.contentType"></div>
+                  </div>
+                </div>
+
+                <!-- tags -->
+                <div x-show="(doc.categories && doc.categories.length) || (doc.tags && doc.tags.length)" class="mt-4 flex flex-wrap gap-1.5">
+                  <template x-for="c in doc.categories" :key="'c'+c">
+                    <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md" x-text="c"></span>
+                  </template>
+                  <template x-for="t in doc.tags" :key="'t'+t">
+                    <span class="text-xs bg-lexis-tint text-lexis-darker px-2 py-0.5 rounded-md" x-text="'#'+t"></span>
+                  </template>
+                </div>
+              </div>
+
+              <!-- audit timeline + preview -->
+              <div class="grid md:grid-cols-2 border-t border-gray-100">
+                <!-- timeline -->
+                <div class="p-6 md:border-r border-gray-100">
+                  <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-gray-700">Audit trail</h3>
+                    <span x-show="polling" class="text-xs text-gray-400 flex items-center gap-1">
+                      <svg class="w-3 h-3 spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" class="opacity-25"/><path d="M21 12a9 9 0 00-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                      polling…
+                    </span>
+                  </div>
+                  <ol class="relative timeline pl-0 space-y-3">
+                    <template x-for="(a, i) in doc.auditTrail" :key="i">
+                      <li class="relative pl-8">
+                        <span class="absolute left-0 top-0.5 w-6 h-6 rounded-full grid place-items-center ring-4 ring-white" :class="badge(a.status).cls">
+                          <span class="w-2 h-2 rounded-full" :class="badge(a.status).dot"></span>
+                        </span>
+                        <div class="text-sm font-medium" x-text="a.status"></div>
+                        <div class="text-xs text-gray-400" x-text="fmtTime(a.timestamp)"></div>
+                        <div x-show="a.detail" class="text-xs text-lexis mt-0.5" x-text="a.detail"></div>
+                      </li>
+                    </template>
+                  </ol>
+                </div>
+
+                <!-- preview -->
+                <div class="p-6">
+                  <h3 class="text-sm font-semibold text-gray-700 mb-3">Generated preview</h3>
+                  <template x-if="doc.status === 'Processed' && preview !== null">
+                    <pre class="text-xs font-mono bg-gray-50 border border-gray-100 rounded-lg p-3 whitespace-pre-wrap break-words max-h-56 overflow-auto text-gray-700" x-text="preview"></pre>
+                  </template>
+                  <template x-if="doc.status === 'Failed'">
+                    <div class="text-sm text-lexis bg-lexis-tint rounded-lg p-3">Processing failed — see the audit trail for the reason.</div>
+                  </template>
+                  <template x-if="doc.status !== 'Processed' && doc.status !== 'Failed'">
+                    <div class="text-sm text-gray-400 bg-gray-50 rounded-lg p-3">Preview will appear once processing completes…</div>
+                  </template>
+
+                  <div class="mt-4 flex flex-wrap gap-2">
+                    <a :href="'/documents/' + doc.documentId + '/content'" target="_blank"
+                       class="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 hover:border-lexis hover:text-lexis transition">Download content</a>
+                    <button @click="resubmit()" :disabled="submitting"
+                            class="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 hover:border-lexis hover:text-lexis transition disabled:opacity-50">
+                      Submit again (test dedup)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Lookup existing -->
+          <div class="bg-white rounded-2xl shadow-card border border-gray-100 p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">Look up a document</h3>
+            <div class="flex gap-2">
+              <input x-model="lookupId" type="text" placeholder="Paste a document ID (GUID)"
+                     class="flex-1 rounded-lg border border-gray-300 focus:border-lexis focus:ring-lexis text-sm font-mono" />
+              <button @click="lookup()" class="bg-ink hover:bg-black text-white text-sm font-medium px-4 rounded-lg transition">Fetch</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="border-t border-gray-200 py-5 text-center text-xs text-gray-400">
+      LNDocumentProcessor · local test &amp; demo console
+    </footer>
+  </div>
+
+  <script>
+    function app() {
+      return {
+        apiOnline: false,
+        dragging: false,
+        submitting: false,
+        polling: false,
+        isDuplicate: false,
+        globalError: '',
+        errors: {},
+        lookupId: '',
+        preview: null,
+        doc: null,
+        providers: [
+          'Acme Legal',
+          'Caldwell & Hayes LLP',
+          'Meridian Legal Group',
+          'Thornton Barrett Attorneys',
+          'Apex Counsel Partners',
+          'Brightwater Law Chambers',
+          'Sterling & Vance Inc',
+          'Ravensworth Legal Services',
+          'Holloway Pike Advocates',
+          'Northgate Litigation Co',
+          'Emberline Law Associates',
+        ],
+        form: { provider: '', sourceDocumentId: '', title: '', jurisdiction: '', categories: '', tags: '', file: null },
+        _pollTimer: null,
+
+        init() {
+          this.ping();
+        },
+
+        async ping() {
+          try {
+            // Any response (even 404) proves the service is reachable.
+            await fetch('/documents/00000000-0000-0000-0000-000000000000/status');
+            this.apiOnline = true;
+          } catch { this.apiOnline = false; }
+        },
+
+        onPick(e) { if (e.target.files.length) this.form.file = e.target.files[0]; },
+        onDrop(e) { this.dragging = false; if (e.dataTransfer.files.length) this.form.file = e.dataTransfer.files[0]; },
+        clearFile() { this.form.file = null; this.$refs.file.value = ''; },
+
+        validate() {
+          this.errors = {};
+          if (!this.form.provider.trim()) this.errors.provider = 'Required.';
+          if (!this.form.sourceDocumentId.trim()) this.errors.sourceDocumentId = 'Required.';
+          if (!this.form.title.trim()) this.errors.title = 'Required.';
+          if (!this.form.file) this.errors.file = 'A file is required.';
+          else if (this.form.file.size > 5 * 1024 * 1024) this.errors.file = 'File exceeds 5 MB.';
+          return Object.keys(this.errors).length === 0;
+        },
+
+        buildFormData() {
+          const fd = new FormData();
+          fd.append('sourceDocumentId', this.form.sourceDocumentId);
+          fd.append('provider', this.form.provider);
+          fd.append('title', this.form.title);
+          fd.append('jurisdiction', this.form.jurisdiction);
+          fd.append('categories', this.form.categories);
+          fd.append('tags', this.form.tags);
+          fd.append('file', this.form.file);
+          return fd;
+        },
+
+        async submit() {
+          if (!this.validate()) return;
+          this.globalError = '';
+          this.submitting = true;
+          this.stopPoll();
+          try {
+            const res = await fetch('/documents', { method: 'POST', body: this.buildFormData() });
+            if (res.status === 400) {
+              const p = await res.json();
+              this.errors = Object.fromEntries(Object.entries(p.errors || {}).map(([k, v]) => [k, v.join(' ')]));
+              return;
+            }
+            if (!res.ok) throw new Error('Unexpected response ' + res.status);
+            this.isDuplicate = res.status === 200;
+            const data = await res.json();
+            this.apiOnline = true;
+            this.adopt(data);
+            this.startPoll(data.documentId);
+          } catch (e) {
+            this.globalError = e.message || 'Submission failed.';
+          } finally {
+            this.submitting = false;
+          }
+        },
+
+        // Re-post the SAME provider + sourceDocumentId to demonstrate dedup -> 200.
+        // Reuses whatever is currently in the form (keep the same values to see the duplicate path).
+        async resubmit() {
+          await this.submit();
+        },
+
+        adopt(d) { this.doc = d; this.preview = null; },
+
+        startPoll(id) {
+          this.polling = true;
+          const tick = async () => {
+            try {
+              const r = await fetch('/documents/' + id);
+              if (r.ok) {
+                this.doc = await r.json();
+                if (this.doc.status === 'Processed') { await this.loadPreview(id); this.stopPoll(); return; }
+                if (this.doc.status === 'Failed') { this.stopPoll(); return; }
+              }
+            } catch { /* keep polling */ }
+            this._pollTimer = setTimeout(tick, 700);
+          };
+          this._pollTimer = setTimeout(tick, 400);
+        },
+
+        stopPoll() { this.polling = false; if (this._pollTimer) clearTimeout(this._pollTimer); this._pollTimer = null; },
+
+        async loadPreview(id) {
+          try {
+            const r = await fetch('/documents/' + id + '/preview');
+            this.preview = r.ok ? await r.text() : '(preview unavailable)';
+          } catch { this.preview = '(preview unavailable)'; }
+        },
+
+        async lookup() {
+          const id = this.lookupId.trim();
+          if (!id) return;
+          this.globalError = ''; this.isDuplicate = false; this.stopPoll();
+          try {
+            const r = await fetch('/documents/' + id);
+            if (r.status === 404) { this.globalError = 'No document found with that ID.'; return; }
+            if (!r.ok) throw new Error('Lookup failed (' + r.status + ').');
+            this.doc = await r.json();
+            this.preview = null;
+            if (this.doc.status === 'Processed') this.loadPreview(id);
+            else if (this.doc.status !== 'Failed') this.startPoll(id);
+          } catch (e) { this.globalError = e.message; }
+        },
+
+        // ---- helpers ----
+        prettyBytes(n) {
+          if (n == null) return '—';
+          if (n < 1024) return n + ' B';
+          if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+          return (n / 1024 / 1024).toFixed(2) + ' MB';
+        },
+        fmtTime(ts) { try { return new Date(ts).toLocaleString(); } catch { return ts; } },
+        badge(status) {
+          const map = {
+            Received:   { cls: 'bg-gray-100 text-gray-600',     dot: 'bg-gray-400' },
+            Stored:     { cls: 'bg-sky-100 text-sky-700',       dot: 'bg-sky-500' },
+            Queued:     { cls: 'bg-amber-100 text-amber-700',   dot: 'bg-amber-500' },
+            Processing: { cls: 'bg-indigo-100 text-indigo-700', dot: 'bg-indigo-500' },
+            Processed:  { cls: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
+            Failed:     { cls: 'bg-lexis-tint text-lexis-darker', dot: 'bg-lexis' },
+          };
+          return map[status] || map.Received;
+        },
+      }
+    }
+  </script>
+</body>
+</html>

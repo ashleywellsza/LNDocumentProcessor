@@ -56,6 +56,43 @@ docker run --rm -p 8080:8080 -e ASPNETCORE_ENVIRONMENT=Development ln-document-p
 
 ---
 
+## Test it in the browser (Web console)
+
+The service ships with a built-in web console for submitting and tracking documents — no separate frontend to install or run. It is a static page served by the API itself, so it is available as soon as the service is running.
+
+**1. Start the service** (either option above), e.g.:
+
+```bash
+dotnet run --project src/LNDocumentProcessor.Api --urls http://localhost:5080
+```
+
+**2. Open the web console** at the site root:
+
+```
+http://localhost:5080
+```
+
+(With Docker, use `http://localhost:8080`.)
+
+**3. Submit a document:**
+
+- Pick a **Provider** from the dropdown (e.g. *Acme Legal*).
+- Enter a **Source document ID** (any value, e.g. `SRC-1001`) and a **Title**.
+- Optionally set jurisdiction, categories, and tags (comma-separated).
+- **Drag & drop** a file onto the upload area, or click to browse. A ready-made sample, [`Acme Legal.txt`](Acme%20Legal.txt), is included in the repo root — use it if you don't have a document handy.
+- Click **Submit document**.
+
+**4. Watch it process.** The console shows the document card and automatically polls the status, animating it through `Received → Stored → Queued → Processing → Processed`. When complete it displays the generated **preview**, the **audit trail** timeline, and a link to download the raw content.
+
+**5. Try the extras:**
+
+- **Submit again (test dedup)** — re-submits the same `provider + sourceDocumentId`; the console shows a *“Duplicate detected — HTTP 200, not re-queued”* banner, demonstrating idempotent intake.
+- **Look up a document** — paste any document ID (GUID) to fetch its current status and preview.
+
+> Prefer raw HTTP? The same operations are available via the Swagger UI (`/swagger`) or `curl` — see [API Endpoints](#api-endpoints) below.
+
+---
+
 ## Configuration
 
 All runtime configuration lives in `src/LNDocumentProcessor.Api/appsettings.json`.
