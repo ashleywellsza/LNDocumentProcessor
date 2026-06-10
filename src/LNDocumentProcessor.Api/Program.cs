@@ -15,6 +15,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Serve the static test/demo SPA from wwwroot (index.html at the site root).
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapDocumentEndpoints();
 
 app.Run();

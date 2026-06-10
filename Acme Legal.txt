@@ -1,0 +1,26 @@
+SERVICE AGREEMENT
+
+THIS SERVICE AGREEMENT ("Agreement") is entered into as of 10 June 2026, by and between Acme Legal Services (Pty) Ltd, a company incorporated under the laws of the Republic of South Africa ("Provider"), and the counterparty identified in Schedule A ("Client").
+
+WHEREAS the Provider is engaged in the business of supplying legal document processing services; and WHEREAS the Client wishes to engage the Provider on the terms set out herein, the parties agree as follows:
+
+1. DEFINITIONS
+1.1 "Confidential Information" means any information disclosed by one party to the other, whether orally or in writing, that is designated as confidential or would reasonably be understood to be confidential.
+1.2 "Services" means the document intake, storage, and processing services described in Schedule B.
+
+2. SCOPE OF SERVICES
+The Provider shall perform the Services with reasonable skill and care, in accordance with applicable laws of the jurisdiction of South Africa and the timelines set out in Schedule B.
+
+3. FEES AND PAYMENT
+The Client shall pay the fees set out in Schedule C within thirty (30) days of the date of each valid invoice. Late payments shall bear interest at the prescribed rate.
+
+4. CONFIDENTIALITY
+Each party shall keep the other party's Confidential Information secret and shall not disclose it to any third party except as required by law.
+
+5. TERMINATION
+Either party may terminate this Agreement on thirty (30) days' written notice. Obligations of confidentiality shall survive termination.
+
+6. GOVERNING LAW
+This Agreement shall be governed by and construed in accordance with the laws of the Republic of South Africa.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.
