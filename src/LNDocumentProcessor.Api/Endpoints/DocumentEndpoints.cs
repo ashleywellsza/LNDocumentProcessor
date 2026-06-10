@@ -1,5 +1,6 @@
 using LNDocumentProcessor.Api.Application.Abstractions;
 using LNDocumentProcessor.Api.Application.Documents;
+using Microsoft.AspNetCore.Mvc;
 
 namespace LNDocumentProcessor.Api.Endpoints;
 
@@ -20,7 +21,6 @@ public static class DocumentEndpoints
             .WithName("SubmitDocument")
             .WithSummary("Submit a document (multipart/form-data: metadata fields + file).")
             .DisableAntiforgery()
-            .Accepts<IFormFile>("multipart/form-data")
             .Produces<DocumentResponse>(StatusCodes.Status201Created)
             .Produces<DocumentResponse>(StatusCodes.Status200OK)
             .ProducesValidationProblem();
@@ -52,42 +52,43 @@ public static class DocumentEndpoints
         return app;
     }
 
+    // Explicit [FromForm] parameters so the multipart schema is described in
+    // OpenAPI and the Swagger UI renders a field for each one plus a file picker.
     private static async Task<IResult> SubmitAsync(
-        HttpRequest request,
+        [FromForm] string? sourceDocumentId,
+        [FromForm] string? provider,
+        [FromForm] string? title,
+        [FromForm] string? jurisdiction,
+        [FromForm] string? categories,
+        [FromForm] string? tags,
+        [FromForm] string? contentType,
+        [FromForm] string? fileName,
+        IFormFile? file,
         SubmitDocumentHandler handler,
         CancellationToken cancellationToken)
     {
-        if (!request.HasFormContentType)
-        {
-            return Results.Problem(
-                "Request must be multipart/form-data.", statusCode: StatusCodes.Status415UnsupportedMediaType);
-        }
-
-        var form = await request.ReadFormAsync(cancellationToken);
-        var file = form.Files.GetFile("file");
-
         var errors = new Dictionary<string, string[]>();
-        string Required(string field)
-        {
-            var value = form[field].ToString();
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                errors[field] = ["The field is required."];
-            }
-            return value;
-        }
 
-        var sourceDocumentId = Required("sourceDocumentId");
-        var provider = Required("provider");
-        var title = Required("title");
+        if (string.IsNullOrWhiteSpace(sourceDocumentId))
+        {
+            errors[nameof(sourceDocumentId)] = ["The field is required."];
+        }
+        if (string.IsNullOrWhiteSpace(provider))
+        {
+            errors[nameof(provider)] = ["The field is required."];
+        }
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            errors[nameof(title)] = ["The field is required."];
+        }
 
         if (file is null || file.Length == 0)
         {
-            errors["file"] = ["A non-empty file is required."];
+            errors[nameof(file)] = ["A non-empty file is required."];
         }
         else if (file.Length > MaxContentBytes)
         {
-            errors["file"] = [$"File exceeds the maximum size of {MaxContentBytes} bytes."];
+            errors[nameof(file)] = [$"File exceeds the maximum size of {MaxContentBytes} bytes."];
         }
 
         if (errors.Count > 0)
@@ -95,21 +96,19 @@ public static class DocumentEndpoints
             return Results.ValidationProblem(errors);
         }
 
-        var contentType = !string.IsNullOrWhiteSpace(form["contentType"])
-            ? form["contentType"].ToString()
+        var resolvedContentType = !string.IsNullOrWhiteSpace(contentType)
+            ? contentType!
             : (file!.ContentType ?? "application/octet-stream");
 
         var command = new SubmitDocumentCommand(
-            SourceDocumentId: sourceDocumentId,
-            Provider: provider,
-            Title: title,
-            Jurisdiction: NullIfEmpty(form["jurisdiction"].ToString()),
-            Categories: SplitCsv(form["categories"].ToString()),
-            Tags: SplitCsv(form["tags"].ToString()),
-            ContentType: contentType,
-            FileName: !string.IsNullOrWhiteSpace(form["fileName"])
-                ? form["fileName"].ToString()
-                : file!.FileName,
+            SourceDocumentId: sourceDocumentId!,
+            Provider: provider!,
+            Title: title!,
+            Jurisdiction: NullIfEmpty(jurisdiction ?? string.Empty),
+            Categories: SplitCsv(categories ?? string.Empty),
+            Tags: SplitCsv(tags ?? string.Empty),
+            ContentType: resolvedContentType,
+            FileName: !string.IsNullOrWhiteSpace(fileName) ? fileName! : file!.FileName,
             Content: file!.OpenReadStream());
 
         var result = await handler.HandleAsync(command, cancellationToken);
